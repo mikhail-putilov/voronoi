@@ -63,7 +63,7 @@ class Voronoi:
             # find arc alpha which is vertically above p
             is_intersect, point_of_intersection = self.intersect(p, alpha)
             if is_intersect:
-                # new parabola intersects arc alpha
+                # new parabola intersects next arc?
                 is_intersect_next_arc, _ = self.intersect(p, alpha.pnext)
                 if alpha.pnext and not is_intersect_next_arc:
                     # add new alpha arc between alpha and next(alpha)
@@ -74,7 +74,7 @@ class Voronoi:
                     alpha.pnext = Arc(alpha.p, point_prev=alpha)
                 alpha.pnext.segment_rhs = alpha.segment_rhs
 
-                # add p between alpha and alpha.pnext
+                # add p between alpha and next(alpha)
                 alpha.pnext.pprev = Arc(p, point_prev=alpha, point_next=alpha.pnext)
                 alpha.pnext = alpha.pnext.pprev
 
@@ -97,12 +97,11 @@ class Voronoi:
                 return
 
             alpha = alpha.pnext
-
-        # if p never intersects an arc, append it to the list
+        # специальный случай, при котором текущий сайт не пересекает ни одну арку выше
         alpha = self.arc
-        while alpha.pnext is not None:
+        while alpha.pnext:
             alpha = alpha.pnext
-        alpha.pnext = Arc(p, alpha)
+        alpha.pnext = Arc(p, point_prev=alpha)
 
         # insert new segment between p and i
         x = self.x0
