@@ -64,8 +64,8 @@ class Voronoi:
             is_intersect, point_of_intersection = self.intersect(p, alpha)
             if is_intersect:
                 # new parabola intersects next arc?
-                is_intersect_next_arc, _ = self.intersect(p, alpha.pnext)
-                if alpha.pnext and not is_intersect_next_arc:
+                # is_intersect_next_arc, _ = self.intersect(p, alpha.pnext)
+                if alpha.pnext:
                     # add new alpha arc between alpha and next(alpha)
                     alpha.pnext.pprev = Arc(alpha.p, point_prev=alpha, point_next=alpha.pnext)
                     alpha.pnext = alpha.pnext.pprev
@@ -78,21 +78,21 @@ class Voronoi:
                 alpha.pnext.pprev = Arc(p, point_prev=alpha, point_next=alpha.pnext)
                 alpha.pnext = alpha.pnext.pprev
 
-                alpha = alpha.pnext  # now alpha points to the new arc
+                new_arc = alpha.pnext
 
                 # add new half-edges connected to alpha's endpoints
                 seg = Segment(point_of_intersection)
                 self.final_line_segments.append(seg)
-                alpha.pprev.segment_rhs = alpha.segment_lhs = seg
+                new_arc.pprev.segment_rhs = new_arc.segment_lhs = seg
 
                 seg = Segment(point_of_intersection)
                 self.final_line_segments.append(seg)
-                alpha.pnext.segment_lhs = alpha.segment_rhs = seg
+                new_arc.pnext.segment_lhs = new_arc.segment_rhs = seg
 
                 # check for new circle events around the new arc
-                self.check_circle_event(alpha, p.x)
-                self.check_circle_event(alpha.pprev, p.x)
-                self.check_circle_event(alpha.pnext, p.x)
+                self.check_circle_event(new_arc, p.x)
+                self.check_circle_event(new_arc.pprev, p.x)
+                self.check_circle_event(new_arc.pnext, p.x)
 
                 return
 
