@@ -26,16 +26,16 @@ class Arc:
     pprev = None
     pnext = None
     e = None
-    s0 = None
-    s1 = None
+    segment_lhs = None
+    segment_rhs = None
     
     def __init__(self, point, point_prev=None, point_next=None):
         self.p = point
         self.pprev = point_prev
         self.pnext = point_next
         self.e = None
-        self.s0 = None
-        self.s1 = None
+        self.segment_lhs = None
+        self.segment_rhs = None
 
 class Segment:
     start = None

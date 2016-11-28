@@ -1,14 +1,16 @@
+# -*- coding: utf-8 -*-
 import math
 
 from utils import Point, Event, Arc, Segment, PriorityQueue
+
 
 class Voronoi:
     def __init__(self, points, lowest, highest):
         self.final_line_segments = []  # list of line segment
         self.arc = None  # beach line
 
-        self.sites = PriorityQueue()  # site events
-        self.circles = PriorityQueue()  # circle events
+        self.sites = PriorityQueue()
+        self.circles = PriorityQueue()
 
         # bounding box
         self.x0 = float(lowest)
@@ -40,17 +42,17 @@ class Voronoi:
     def process(self):
         while not self.sites.empty():
             if not self.circles.empty() and (self.circles.top().x <= self.sites.top().x):
-                self.process_event()  # handle circle event
+                self.process_circle()  # handle circle event
             else:
-                self.process_point()  # handle site event
+                self.process_site()  # handle site event
 
         # after all points, process remaining circle events
         while not self.circles.empty():
-            self.process_event()
+            self.process_circle()
 
         self.finish_edges()
 
-    def process_point(self):
+    def process_site(self):
         p = self.sites.pop()
         if self.arc is None:
             self.arc = Arc(p)
@@ -70,7 +72,7 @@ class Voronoi:
                     else:
                         # add at the end of the list
                         alpha.pnext = Arc(alpha.p, point_prev=alpha)
-                    alpha.pnext.s1 = alpha.s1
+                    alpha.pnext.segment_rhs = alpha.segment_rhs
 
                     # add p between alpha and alpha.pnext
                     alpha.pnext.pprev = Arc(p, point_prev=alpha, point_next=alpha.pnext)
@@ -81,11 +83,11 @@ class Voronoi:
                     # add new half-edges connected to alpha's endpoints
                     seg = Segment(point_of_intersection)
                     self.final_line_segments.append(seg)
-                    alpha.pprev.s1 = alpha.s0 = seg
+                    alpha.pprev.segment_rhs = alpha.segment_lhs = seg
 
                     seg = Segment(point_of_intersection)
                     self.final_line_segments.append(seg)
-                    alpha.pnext.s0 = alpha.s1 = seg
+                    alpha.pnext.segment_lhs = alpha.segment_rhs = seg
 
                     # check for new circle events around the new arc
                     self.check_circle_event(alpha, p.x)
@@ -108,11 +110,10 @@ class Voronoi:
             start = Point(x, y)
 
             seg = Segment(start)
-            alpha.s1 = alpha.pnext.s0 = seg
+            alpha.segment_rhs = alpha.pnext.segment_lhs = seg
             self.final_line_segments.append(seg)
 
-
-    def process_event(self):
+    def process_circle(self):
         event = self.circles.pop()
 
         if event.valid:
@@ -124,14 +125,14 @@ class Voronoi:
             disappeared_arc = event.a
             if disappeared_arc.pprev is not None:
                 disappeared_arc.pprev.pnext = disappeared_arc.pnext
-                disappeared_arc.pprev.s1 = s
+                disappeared_arc.pprev.segment_rhs = s
             if disappeared_arc.pnext is not None:
                 disappeared_arc.pnext.pprev = disappeared_arc.pprev
-                disappeared_arc.pnext.s0 = s
+                disappeared_arc.pnext.segment_lhs = s
 
             # finish the edges before and after a
-            if disappeared_arc.s0 is not None: disappeared_arc.s0.finish(event.p)
-            if disappeared_arc.s1 is not None: disappeared_arc.s1.finish(event.p)
+            if disappeared_arc.segment_lhs is not None: disappeared_arc.segment_lhs.finish(event.p)
+            if disappeared_arc.segment_rhs is not None: disappeared_arc.segment_rhs.finish(event.p)
 
             # recheck circle events on either side of p
             if disappeared_arc.pprev is not None: self.check_circle_event(disappeared_arc.pprev, event.x)
@@ -147,16 +148,16 @@ class Voronoi:
 
         if (arc.pprev is None) or (arc.pnext is None): return
 
-        is_breakpoints_converge, x, center_of_circle = self.circle(arc.pprev.p, arc.p, arc.pnext.p)
-        if is_breakpoints_converge and (x > self.x0):
-            arc.e = Event(x, center_of_circle, arc)
+        is_breakpoints_converge, lowest_point, center_of_circle = self.circle(arc.pprev.p, arc.p, arc.pnext.p)
+        if is_breakpoints_converge and (lowest_point > self.x0):
+            arc.e = Event(lowest_point, center_of_circle, arc)
             self.circles.push(arc.e)
 
     def circle(self, a, b, c):
+        """магия алгебры, которую я взял из инета"""
         # check if bc is a "right turn" from ab
         if ((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) > 0: return False, None, None
 
-        # Joseph O'Rourke, Computational Geometry in C (2nd ed.) p.189
         A = b.x - a.x
         B = b.y - a.y
         C = c.x - a.x
@@ -172,12 +173,13 @@ class Voronoi:
         oy = 1.0 * (A * F - C * E) / G
 
         # o.x plus radius equals max x coord
-        x = ox + math.sqrt((a.x - ox) ** 2 + (a.y - oy) ** 2)
+        lowest_point = ox + math.sqrt((a.x - ox) ** 2 + (a.y - oy) ** 2)
         center_of_circle = Point(ox, oy)
 
-        return True, x, center_of_circle
+        return True, lowest_point, center_of_circle
 
     def intersect(self, point, arc):
+        """магия алгебры, которую я взял из инета"""
         # check whether a new parabola at point p intersect with arc i
         if (arc is None): return False, None
         if (arc.p.x == point.x): return False, None
@@ -198,6 +200,7 @@ class Voronoi:
         return False, None
 
     def intersection(self, p0, p1, l):
+        """магия алгебры, которую я взял из инета"""
         # get the intersection of two parabolas
         p = p0
         if (p0.x == p1.x):
@@ -226,18 +229,10 @@ class Voronoi:
         l = self.x1 + (self.x1 - self.x0) + (self.y1 - self.y0)
         i = self.arc
         while i.pnext is not None:
-            if i.s1 is not None:
+            if i.segment_rhs is not None:
                 p = self.intersection(i.p, i.pnext.p, l * 2.0)
-                i.s1.finish(p)
+                i.segment_rhs.finish(p)
             i = i.pnext
-
-    def print_output(self):
-        it = 0
-        for o in self.final_line_segments:
-            it = it + 1
-            p0 = o.start
-            p1 = o.end
-            print(p0.x, p0.y, p1.x, p1.y)
 
     def get_output(self):
         res = []
