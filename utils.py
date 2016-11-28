@@ -9,7 +9,7 @@ class Point:
        self.x = x
        self.y = y
 
-class Event:
+class CircleEvent:
     x = 0.0
     p = None
     a = None

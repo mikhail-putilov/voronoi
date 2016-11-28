@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import math
 
-from utils import Point, Event, Arc, Segment, PriorityQueue
+from utils import Point, CircleEvent, Arc, Segment, PriorityQueue
 
 
 class Voronoi:
@@ -12,7 +12,7 @@ class Voronoi:
         self.sites = PriorityQueue()
         self.circles = PriorityQueue()
 
-        # bounding box
+        # bounding box of size 0
         self.x0 = float(lowest)
         self.x1 = float(lowest)
         self.y0 = float(highest)
@@ -54,64 +54,64 @@ class Voronoi:
 
     def process_site(self):
         p = self.sites.pop()
-        if self.arc is None:
+        if not self.arc:
             self.arc = Arc(p)
-        else:
-            # find the current arcs at p.y
-            alpha = self.arc
-            while alpha is not None:
-                # find arc alpha which is vertically above p
-                is_intersect, point_of_intersection = self.intersect(p, alpha)
-                if is_intersect:
-                    # new parabola intersects arc alpha
-                    is_intersect_next_arc, _ = self.intersect(p, alpha.pnext)
-                    if (alpha.pnext is not None) and not is_intersect_next_arc:
-                        # add new alpha arc between alpha and next(alpha)
-                        alpha.pnext.pprev = Arc(alpha.p, point_prev=alpha, point_next=alpha.pnext)
-                        alpha.pnext = alpha.pnext.pprev
-                    else:
-                        # add at the end of the list
-                        alpha.pnext = Arc(alpha.p, point_prev=alpha)
-                    alpha.pnext.segment_rhs = alpha.segment_rhs
-
-                    # add p between alpha and alpha.pnext
-                    alpha.pnext.pprev = Arc(p, point_prev=alpha, point_next=alpha.pnext)
+            return
+        # find the current arcs at p.y
+        alpha = self.arc
+        while alpha is not None:
+            # find arc alpha which is vertically above p
+            is_intersect, point_of_intersection = self.intersect(p, alpha)
+            if is_intersect:
+                # new parabola intersects arc alpha
+                is_intersect_next_arc, _ = self.intersect(p, alpha.pnext)
+                if alpha.pnext and not is_intersect_next_arc:
+                    # add new alpha arc between alpha and next(alpha)
+                    alpha.pnext.pprev = Arc(alpha.p, point_prev=alpha, point_next=alpha.pnext)
                     alpha.pnext = alpha.pnext.pprev
+                else:
+                    # add at the end of the list
+                    alpha.pnext = Arc(alpha.p, point_prev=alpha)
+                alpha.pnext.segment_rhs = alpha.segment_rhs
 
-                    alpha = alpha.pnext  # now alpha points to the new arc
+                # add p between alpha and alpha.pnext
+                alpha.pnext.pprev = Arc(p, point_prev=alpha, point_next=alpha.pnext)
+                alpha.pnext = alpha.pnext.pprev
 
-                    # add new half-edges connected to alpha's endpoints
-                    seg = Segment(point_of_intersection)
-                    self.final_line_segments.append(seg)
-                    alpha.pprev.segment_rhs = alpha.segment_lhs = seg
+                alpha = alpha.pnext  # now alpha points to the new arc
 
-                    seg = Segment(point_of_intersection)
-                    self.final_line_segments.append(seg)
-                    alpha.pnext.segment_lhs = alpha.segment_rhs = seg
+                # add new half-edges connected to alpha's endpoints
+                seg = Segment(point_of_intersection)
+                self.final_line_segments.append(seg)
+                alpha.pprev.segment_rhs = alpha.segment_lhs = seg
 
-                    # check for new circle events around the new arc
-                    self.check_circle_event(alpha, p.x)
-                    self.check_circle_event(alpha.pprev, p.x)
-                    self.check_circle_event(alpha.pnext, p.x)
+                seg = Segment(point_of_intersection)
+                self.final_line_segments.append(seg)
+                alpha.pnext.segment_lhs = alpha.segment_rhs = seg
 
-                    return
+                # check for new circle events around the new arc
+                self.check_circle_event(alpha, p.x)
+                self.check_circle_event(alpha.pprev, p.x)
+                self.check_circle_event(alpha.pnext, p.x)
 
-                alpha = alpha.pnext
+                return
 
-            # if p never intersects an arc, append it to the list
-            alpha = self.arc
-            while alpha.pnext is not None:
-                alpha = alpha.pnext
-            alpha.pnext = Arc(p, alpha)
+            alpha = alpha.pnext
 
-            # insert new segment between p and i
-            x = self.x0
-            y = (alpha.pnext.p.y + alpha.p.y) / 2.0
-            start = Point(x, y)
+        # if p never intersects an arc, append it to the list
+        alpha = self.arc
+        while alpha.pnext is not None:
+            alpha = alpha.pnext
+        alpha.pnext = Arc(p, alpha)
 
-            seg = Segment(start)
-            alpha.segment_rhs = alpha.pnext.segment_lhs = seg
-            self.final_line_segments.append(seg)
+        # insert new segment between p and i
+        x = self.x0
+        y = (alpha.pnext.p.y + alpha.p.y) / 2.0
+        start = Point(x, y)
+
+        seg = Segment(start)
+        alpha.segment_rhs = alpha.pnext.segment_lhs = seg
+        self.final_line_segments.append(seg)
 
     def process_circle(self):
         event = self.circles.pop()
@@ -131,27 +131,30 @@ class Voronoi:
                 disappeared_arc.pnext.segment_lhs = s
 
             # finish the edges before and after a
-            if disappeared_arc.segment_lhs is not None: disappeared_arc.segment_lhs.finish(event.p)
-            if disappeared_arc.segment_rhs is not None: disappeared_arc.segment_rhs.finish(event.p)
+            if disappeared_arc.segment_lhs: disappeared_arc.segment_lhs.finish(event.p)
+            if disappeared_arc.segment_rhs: disappeared_arc.segment_rhs.finish(event.p)
 
             # recheck circle events on either side of p
-            if disappeared_arc.pprev is not None: self.check_circle_event(disappeared_arc.pprev, event.x)
-            if disappeared_arc.pnext is not None: self.check_circle_event(disappeared_arc.pnext, event.x)
+            if disappeared_arc.pprev: self.check_circle_event(disappeared_arc.pprev, event.x)
+            if disappeared_arc.pnext: self.check_circle_event(disappeared_arc.pnext, event.x)
 
     # Look for a new circle event for arc i.
     def check_circle_event(self, arc, x0):
         # look for a new circle event for arc i
         # Invalidate any old event.
-        if (arc.e is not None) and (arc.e.x != self.x0):
-            arc.e.valid = False
-        arc.e = None
+        self.invalidate_old_circle(arc)
 
         if (arc.pprev is None) or (arc.pnext is None): return
 
         is_breakpoints_converge, lowest_point, center_of_circle = self.circle(arc.pprev.p, arc.p, arc.pnext.p)
         if is_breakpoints_converge and (lowest_point > self.x0):
-            arc.e = Event(lowest_point, center_of_circle, arc)
+            arc.e = CircleEvent(lowest_point, center_of_circle, arc)
             self.circles.push(arc.e)
+
+    def invalidate_old_circle(self, arc):
+        if (arc.e is not None) and (arc.e.x != self.x0):
+            arc.e.valid = False
+        arc.e = None
 
     def circle(self, a, b, c):
         """магия алгебры, которую я взял из инета"""
