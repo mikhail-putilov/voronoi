@@ -4,11 +4,11 @@ from utils import Point, Event, Arc, Segment, PriorityQueue
 
 class Voronoi:
     def __init__(self, points, lowest, highest):
-        self.output = []  # list of line segment
-        self.arc = None  # binary tree for parabola arcs
+        self.final_line_segments = []  # list of line segment
+        self.arc = None  # beach line
 
-        self.points = PriorityQueue()  # site events
-        self.event = PriorityQueue()  # circle events
+        self.sites = PriorityQueue()  # site events
+        self.circles = PriorityQueue()  # circle events
 
         # bounding box
         self.x0 = float(lowest)
@@ -19,7 +19,7 @@ class Voronoi:
         # insert points to site event
         for pts in points:
             point = Point(pts[0], pts[1])
-            self.points.push(point)
+            self.sites.push(point)
             # keep track of bounding box size
             if point.x < self.x0: self.x0 = point.x
             if point.y < self.y0: self.y0 = point.y
@@ -38,51 +38,20 @@ class Voronoi:
         self.y1 = self.y1 + dy
 
     def process(self):
-        while not self.points.empty():
-            if not self.event.empty() and (self.event.top().x <= self.points.top().x):
+        while not self.sites.empty():
+            if not self.circles.empty() and (self.circles.top().x <= self.sites.top().x):
                 self.process_event()  # handle circle event
             else:
                 self.process_point()  # handle site event
 
         # after all points, process remaining circle events
-        while not self.event.empty():
+        while not self.circles.empty():
             self.process_event()
 
         self.finish_edges()
 
     def process_point(self):
-        # get next event from site pq
-        p = self.points.pop()
-        # add new arc (parabola)
-        self.arc_insert(p)
-
-    def process_event(self):
-        # get next event from circle pq
-        event = self.event.pop()
-
-        if event.valid:
-            # start new edge
-            s = Segment(event.p)
-            self.output.append(s)
-
-            # remove associated arc (parabola)
-            disappeared_arc = event.a
-            if disappeared_arc.pprev is not None:
-                disappeared_arc.pprev.pnext = disappeared_arc.pnext
-                disappeared_arc.pprev.s1 = s
-            if disappeared_arc.pnext is not None:
-                disappeared_arc.pnext.pprev = disappeared_arc.pprev
-                disappeared_arc.pnext.s0 = s
-
-            # finish the edges before and after a
-            if disappeared_arc.s0 is not None: disappeared_arc.s0.finish(event.p)
-            if disappeared_arc.s1 is not None: disappeared_arc.s1.finish(event.p)
-
-            # recheck circle events on either side of p
-            if disappeared_arc.pprev is not None: self.check_circle_event(disappeared_arc.pprev, event.x)
-            if disappeared_arc.pnext is not None: self.check_circle_event(disappeared_arc.pnext, event.x)
-
-    def arc_insert(self, p):
+        p = self.sites.pop()
         if self.arc is None:
             self.arc = Arc(p)
         else:
@@ -111,11 +80,11 @@ class Voronoi:
 
                     # add new half-edges connected to alpha's endpoints
                     seg = Segment(point_of_intersection)
-                    self.output.append(seg)
+                    self.final_line_segments.append(seg)
                     alpha.pprev.s1 = alpha.s0 = seg
 
                     seg = Segment(point_of_intersection)
-                    self.output.append(seg)
+                    self.final_line_segments.append(seg)
                     alpha.pnext.s0 = alpha.s1 = seg
 
                     # check for new circle events around the new arc
@@ -135,12 +104,38 @@ class Voronoi:
 
             # insert new segment between p and i
             x = self.x0
-            y = (alpha.pnext.p.y + alpha.p.y) / 2.0;
+            y = (alpha.pnext.p.y + alpha.p.y) / 2.0
             start = Point(x, y)
 
             seg = Segment(start)
             alpha.s1 = alpha.pnext.s0 = seg
-            self.output.append(seg)
+            self.final_line_segments.append(seg)
+
+
+    def process_event(self):
+        event = self.circles.pop()
+
+        if event.valid:
+            # start new edge
+            s = Segment(event.p)
+            self.final_line_segments.append(s)
+
+            # remove associated arc (parabola)
+            disappeared_arc = event.a
+            if disappeared_arc.pprev is not None:
+                disappeared_arc.pprev.pnext = disappeared_arc.pnext
+                disappeared_arc.pprev.s1 = s
+            if disappeared_arc.pnext is not None:
+                disappeared_arc.pnext.pprev = disappeared_arc.pprev
+                disappeared_arc.pnext.s0 = s
+
+            # finish the edges before and after a
+            if disappeared_arc.s0 is not None: disappeared_arc.s0.finish(event.p)
+            if disappeared_arc.s1 is not None: disappeared_arc.s1.finish(event.p)
+
+            # recheck circle events on either side of p
+            if disappeared_arc.pprev is not None: self.check_circle_event(disappeared_arc.pprev, event.x)
+            if disappeared_arc.pnext is not None: self.check_circle_event(disappeared_arc.pnext, event.x)
 
     # Look for a new circle event for arc i.
     def check_circle_event(self, arc, x0):
@@ -155,7 +150,7 @@ class Voronoi:
         is_breakpoints_converge, x, center_of_circle = self.circle(arc.pprev.p, arc.p, arc.pnext.p)
         if is_breakpoints_converge and (x > self.x0):
             arc.e = Event(x, center_of_circle, arc)
-            self.event.push(arc.e)
+            self.circles.push(arc.e)
 
     def circle(self, a, b, c):
         # check if bc is a "right turn" from ab
@@ -238,7 +233,7 @@ class Voronoi:
 
     def print_output(self):
         it = 0
-        for o in self.output:
+        for o in self.final_line_segments:
             it = it + 1
             p0 = o.start
             p1 = o.end
@@ -246,8 +241,8 @@ class Voronoi:
 
     def get_output(self):
         res = []
-        for o in self.output:
+        for o in self.final_line_segments:
             p0 = o.start
             p1 = o.end
-            res.append((p0.x, p0.y, p1.x, p1.y))
+            res.append(((p0.x, p1.x), (p0.y, p1.y)))
         return res

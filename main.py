@@ -14,12 +14,8 @@ def main():
     import matplotlib.pyplot as plt
     plt.plot(site_xs, site_ys, 'bo')
     plt.axis([lowest, highest, lowest, highest])
-    for l in lines:
-        x_0 = l[0]
-        y_0 = l[2]
-        x_1 = l[1]
-        y_1 = l[3]
-        plt.plot([x_0, y_0], [x_1, y_1], 'b-')
+    for xs, ys in lines:
+        plt.plot(xs, ys, 'b-')
     plt.show()
 
 
